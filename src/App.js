@@ -1,3 +1,4 @@
+// App.js
 import { BrowserRouter } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
@@ -6,6 +7,7 @@ import Layout from './components/Layout';
 import { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { setTheme } from './store/slices/themeSlice';
+import LoadingWrapper from './components/UI/Loader/LoadingWrapper';
 
 function App() {
   const dispatch = useDispatch();
@@ -35,9 +37,11 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <BrowserRouter>
-        <Layout>
-          <AppRoutes />
-        </Layout>
+        <LoadingWrapper>
+          <Layout>
+            <AppRoutes />
+          </Layout>
+        </LoadingWrapper>
       </BrowserRouter>
     </ThemeProvider>
   );
