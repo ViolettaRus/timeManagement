@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import styled from 'styled-components';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchTimeEntries } from '../../store/slices/timeEntriesSlice';
@@ -6,7 +6,7 @@ import { fetchProjects } from '../../store/slices/projectsSlice';
 import { 
   startOfToday, endOfToday, 
   startOfWeek, endOfWeek, 
-  startOfMonth, endOfMonth,
+  startOfMonth, endOfMonth 
 } from 'date-fns';
 import RecentTimeEntries from '../../components/Timer/RecentTimeEntries';
 import { Pie, Bar } from 'react-chartjs-2';
@@ -18,7 +18,7 @@ import {
   CategoryScale, 
   LinearScale, 
   BarElement, 
-  Title
+  Title 
 } from 'chart.js';
 import {
   Container,
@@ -27,6 +27,7 @@ import {
   H2
 } from '../../components/UI';
 import { isWithinDateRange } from '../../utils/dateUtils';
+import { formatTime, getTimeUnitLabel } from '../../utils/timeUtils';
 
 ChartJS.register(
   ArcElement,
@@ -39,19 +40,31 @@ ChartJS.register(
 );
 
 const AnalyticsContainer = styled.div`
-  padding: ${props => props.theme.spacing.lg} 0;
+  padding: ${props => props.theme.spacing?.(6) || '24px'} 0;
 `;
 
 const Header = styled.div`
   text-align: center;
-  margin-bottom: ${props => props.theme.spacing.xl};
+  margin-bottom: ${props => props.theme.spacing?.(8) || '32px'};
+`;
+
+const ControlsContainer = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: ${props => props.theme.spacing?.(8) || '32px'};
+  flex-wrap: wrap;
+  gap: ${props => props.theme.spacing?.(4) || '16px'};
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: stretch;
+  }
 `;
 
 const TimeRangeContainer = styled.div`
   display: flex;
-  justify-content: center;
-  gap: ${props => props.theme.spacing.sm};
-  margin-bottom: ${props => props.theme.spacing.xl};
+  gap: ${props => props.theme.spacing?.(2) || '8px'};
   flex-wrap: wrap;
 `;
 
@@ -60,16 +73,37 @@ const TimeRangeButton = styled(Button)`
   
   @media (max-width: 480px) {
     min-width: 80px;
-    padding: ${props => props.theme.spacing.sm};
-    font-size: ${props => props.theme.typography.fontSize.sm};
+    padding: ${props => props.theme.spacing?.(2) || '8px'};
+    font-size: ${props => props.theme.typography?.fontSize?.sm || '14px'};
   }
+`;
+
+const UnitSelector = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${props => props.theme.spacing?.(2) || '8px'};
+  
+  span {
+    font-size: ${props => props.theme.typography?.fontSize?.sm || '14px'};
+    color: ${props => props.theme.colors?.text?.secondary || '#52525b'};
+    white-space: nowrap;
+  }
+`;
+
+const UnitSelect = styled.select`
+  padding: ${props => props.theme.spacing?.(2) || '8px'};
+  border: 1px solid ${props => props.theme.colors?.border?.light || '#e4e4e7'};
+  border-radius: ${props => props.theme.borderRadius?.sm || '4px'};
+  background: ${props => props.theme.colors?.background?.paper || '#ffffff'};
+  color: ${props => props.theme.colors?.text?.primary || '#18181b'};
+  min-width: 100px;
 `;
 
 const ChartsGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr;
-  gap: ${props => props.theme.spacing.xl};
-  margin-bottom: ${props => props.theme.spacing.xl};
+  gap: ${props => props.theme.spacing?.(8) || '32px'};
+  margin-bottom: ${props => props.theme.spacing?.(8) || '32px'};
   
   @media (min-width: 1024px) {
     grid-template-columns: 1fr 1fr;
@@ -77,7 +111,7 @@ const ChartsGrid = styled.div`
 `;
 
 const ChartWrapper = styled(Card)`
-  padding: ${props => props.theme.spacing.lg};
+  padding: ${props => props.theme.spacing?.(6) || '24px'};
   position: relative;
   min-height: 400px;
   display: flex;
@@ -86,8 +120,8 @@ const ChartWrapper = styled(Card)`
 
 const ChartTitle = styled.h3`
   text-align: center;
-  margin-bottom: ${props => props.theme.spacing.lg};
-  color: ${props => props.theme.colors.text.primary};
+  margin-bottom: ${props => props.theme.spacing?.(4) || '16px'};
+  color: ${props => props.theme.colors?.text?.primary || '#18181b'};
 `;
 
 const ChartContainer = styled.div`
@@ -102,58 +136,62 @@ const NoDataMessage = styled.div`
   left: 50%;
   transform: translate(-50%, -50%);
   text-align: center;
-  color: ${props => props.theme.colors.text.secondary};
+  color: ${props => props.theme.colors?.text?.secondary || '#52525b'};
   font-style: italic;
 `;
 
 const StatsGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: ${props => props.theme.spacing.lg};
-  margin-bottom: ${props => props.theme.spacing.xl};
+  gap: ${props => props.theme.spacing?.(4) || '16px'};
+  margin-bottom: ${props => props.theme.spacing?.(8) || '32px'};
 `;
 
 const StatCard = styled(Card)`
   text-align: center;
-  padding: ${props => props.theme.spacing.lg};
+  padding: ${props => props.theme.spacing?.(6) || '24px'};
 `;
 
 const StatValue = styled.div`
   font-size: 2rem;
   font-weight: bold;
-  color: ${props => props.theme.colors.primary};
-  margin-bottom: ${props => props.theme.spacing.xs};
+  color: ${props => props.theme.colors?.primary?.main || '#0ea5e9'};
+  margin-bottom: ${props => props.theme.spacing?.(1) || '4px'};
 `;
 
 const StatLabel = styled.div`
-  color: ${props => props.theme.colors.text.secondary};
-  font-size: ${props => props.theme.typography.fontSize.sm};
+  color: ${props => props.theme.colors?.text?.secondary || '#52525b'};
+  font-size: ${props => props.theme.typography?.fontSize?.sm || '14px'};
 `;
 
 const AnalyticsPage = () => {
   const dispatch = useDispatch();
-  const { entries = [], loading: entriesLoading } = useSelector(state => state.timeEntries || {});
-  const { items: projects = [], loading: projectsLoading } = useSelector(state => state.projects || {});
+  const { items: entries = [], loading: entriesLoading } = useSelector(state => state.timeEntries);
+  const { items: projects = [], loading: projectsLoading } = useSelector(state => state.projects);
   
   const [timeRange, setTimeRange] = useState('week');
-  const [chartData, setChartData] = useState({ 
-    pieData: null, 
-    barData: null,
-    stats: {
-      totalHours: 0,
-      totalEntries: 0,
-      averagePerDay: 0,
-      projectsCount: 0
-    }
-  });
+  const [timeUnit, setTimeUnit] = useState('hours');
 
   useEffect(() => {
     dispatch(fetchTimeEntries());
     dispatch(fetchProjects());
   }, [dispatch]);
 
-  useEffect(() => {
-    if (entriesLoading || projectsLoading) return;
+  const { chartData, stats } = useMemo(() => {
+    if (entriesLoading || projectsLoading) {
+      return {
+        chartData: {
+          pieData: null,
+          barData: null
+        },
+        stats: {
+          totalSeconds: 0,
+          totalEntries: 0,
+          averagePerDay: 0,
+          projectsCount: 0
+        }
+      };
+    }
 
     const now = new Date();
     let start, end;
@@ -176,24 +214,18 @@ const AnalyticsPage = () => {
         end = endOfWeek(now, { weekStartsOn: 1 });
     }
 
-    // Безопасная фильтрация записей
     const filteredEntries = entries.filter(entry => {
       try {
-        // Проверяем обязательные поля
         if (!entry || !entry.projectId || !entry.duration || entry.duration <= 0) {
           return false;
         }
 
-        // Получаем дату из записи (пробуем разные поля)
         const entryDate = entry.date || entry.startTime || entry.createdAt || entry.timestamp;
         
-        // Если даты вообще нет, пропускаем запись
         if (!entryDate) {
-          console.warn('Запись без даты пропущена:', entry);
           return false;
         }
 
-        // Безопасная проверка диапазона
         return isWithinDateRange(entryDate, start, end);
       } catch (error) {
         console.error('Ошибка обработки записи:', error, entry);
@@ -201,18 +233,17 @@ const AnalyticsPage = () => {
       }
     });
 
-    // Calculate statistics
     const totalSeconds = filteredEntries.reduce((sum, entry) => sum + (entry.duration || 0), 0);
-    const totalHours = totalSeconds > 0 ? (totalSeconds / 3600).toFixed(1) : '0.0';
     const totalEntriesCount = filteredEntries.length;
     const averagePerDay = totalEntriesCount > 0 
-      ? (totalSeconds / totalEntriesCount / 3600).toFixed(1) 
-      : '0.0';
+      ? (totalSeconds / totalEntriesCount) 
+      : 0;
 
     const projectsData = projects.reduce((acc, project) => {
-      if (project && project.id) {
-        acc[project.id] = {
-          name: project.name || `Проект ${project.id}`,
+      if (project && (project.id || project._id)) {
+        const projectId = project.id || project._id;
+        acc[projectId] = {
+          name: project.name || `Проект ${projectId}`,
           color: project.color || `#${Math.floor(Math.random()*16777215).toString(16)}`,
           totalSeconds: 0
         };
@@ -220,7 +251,6 @@ const AnalyticsPage = () => {
       return acc;
     }, {});
 
-    // Считаем время по проектам
     filteredEntries.forEach(entry => {
       if (entry && entry.projectId && projectsData[entry.projectId]) {
         projectsData[entry.projectId].totalSeconds += entry.duration || 0;
@@ -235,31 +265,32 @@ const AnalyticsPage = () => {
       }));
 
     if (chartDataArray.length === 0) {
-      setChartData({
-        pieData: {
-          labels: ['Нет данных'],
-          datasets: [{
-            data: [1],
-            backgroundColor: ['#e0e0e0'],
-            borderWidth: 0
-          }]
-        },
-        barData: {
-          labels: ['Нет данных'],
-          datasets: [{
-            data: [0],
-            backgroundColor: ['#e0e0e0'],
-            borderWidth: 0
-          }]
+      return {
+        chartData: {
+          pieData: {
+            labels: ['Нет данных'],
+            datasets: [{
+              data: [1],
+              backgroundColor: ['#e0e0e0'],
+              borderWidth: 0
+            }]
+          },
+          barData: {
+            labels: ['Нет данных'],
+            datasets: [{
+              data: [0],
+              backgroundColor: ['#e0e0e0'],
+              borderWidth: 0
+            }]
+          }
         },
         stats: {
-          totalHours,
-          totalEntries: totalEntriesCount,
-          averagePerDay,
+          totalSeconds: 0,
+          totalEntries: 0,
+          averagePerDay: 0,
           projectsCount: 0
         }
-      });
-      return;
+      };
     }
 
     const pieData = {
@@ -276,8 +307,15 @@ const AnalyticsPage = () => {
     const barData = {
       labels: chartDataArray.map(p => p.name),
       datasets: [{
-        label: 'Часы работы',
-        data: chartDataArray.map(p => parseFloat(p.hours)),
+        label: 'Время работы',
+        data: chartDataArray.map(p => {
+          switch (timeUnit) {
+            case 'seconds': return p.totalSeconds;
+            case 'minutes': return p.totalSeconds / 60;
+            case 'hours': return p.totalSeconds / 3600;
+            default: return p.totalSeconds / 3600;
+          }
+        }),
         backgroundColor: chartDataArray.map(p => p.color),
         borderWidth: 0,
         borderRadius: 6,
@@ -285,19 +323,21 @@ const AnalyticsPage = () => {
       }]
     };
 
-    setChartData({
-      pieData,
-      barData,
+    return {
+      chartData: {
+        pieData,
+        barData
+      },
       stats: {
-        totalHours,
+        totalSeconds,
         totalEntries: totalEntriesCount,
         averagePerDay,
         projectsCount: chartDataArray.length
       }
-    });
-  }, [entries, projects, timeRange, entriesLoading, projectsLoading]);
+    };
+  }, [entries, projects, timeRange, entriesLoading, projectsLoading, timeUnit]);
 
-  const chartOptions = {
+  const chartOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -317,8 +357,12 @@ const AnalyticsPage = () => {
           label: (context) => {
             const label = context.dataset.label || '';
             const value = context.raw;
-            const isHours = context.datasetIndex === 1;
-            return `${label}: ${value} ${isHours ? 'ч' : 'сек'}`;
+            
+            if (context.datasetIndex === 1) {
+              return `${label}: ${formatTime(value * (timeUnit === 'hours' ? 3600 : timeUnit === 'minutes' ? 60 : 1), timeUnit)}`;
+            } else {
+              return `${label}: ${formatTime(value, timeUnit)}`;
+            }
           }
         }
       }
@@ -329,15 +373,19 @@ const AnalyticsPage = () => {
         bottom: 20
       }
     }
-  };
+  }), [timeUnit]);
 
-  const barOptions = {
+  const barOptions = useMemo(() => ({
     ...chartOptions,
     scales: {
       y: {
         beginAtZero: true,
         grid: {
           color: 'rgba(0, 0, 0, 0.1)'
+        },
+        title: {
+          display: true,
+          text: getTimeUnitLabel(timeUnit).toUpperCase()
         }
       },
       x: {
@@ -346,7 +394,7 @@ const AnalyticsPage = () => {
         }
       }
     }
-  };
+  }), [chartOptions, timeUnit]);
 
   if (entriesLoading || projectsLoading) {
     return (
@@ -370,42 +418,56 @@ const AnalyticsPage = () => {
           <p>Анализируйте вашу работу и оптимизируйте время</p>
         </Header>
 
-        <TimeRangeContainer>
-          <TimeRangeButton
-            variant={timeRange === 'day' ? 'primary' : 'outlined'}
-            onClick={() => setTimeRange('day')}
-          >
-            📅 День
-          </TimeRangeButton>
-          <TimeRangeButton
-            variant={timeRange === 'week' ? 'primary' : 'outlined'}
-            onClick={() => setTimeRange('week')}
-          >
-            📆 Неделя
-          </TimeRangeButton>
-          <TimeRangeButton
-            variant={timeRange === 'month' ? 'primary' : 'outlined'}
-            onClick={() => setTimeRange('month')}
-          >
-            🗓️ Месяц
-          </TimeRangeButton>
-        </TimeRangeContainer>
+        <ControlsContainer>
+          <TimeRangeContainer>
+            <TimeRangeButton
+              variant={timeRange === 'day' ? 'primary' : 'outlined'}
+              onClick={() => setTimeRange('day')}
+            >
+              📅 День
+            </TimeRangeButton>
+            <TimeRangeButton
+              variant={timeRange === 'week' ? 'primary' : 'outlined'}
+              onClick={() => setTimeRange('week')}
+            >
+              📆 Неделя
+            </TimeRangeButton>
+            <TimeRangeButton
+              variant={timeRange === 'month' ? 'primary' : 'outlined'}
+              onClick={() => setTimeRange('month')}
+            >
+              🗓️ Месяц
+            </TimeRangeButton>
+          </TimeRangeContainer>
+
+          <UnitSelector>
+            <span>Единицы:</span>
+            <UnitSelect
+              value={timeUnit}
+              onChange={(e) => setTimeUnit(e.target.value)}
+            >
+              <option value="hours">Часы</option>
+              <option value="minutes">Минуты</option>
+              <option value="seconds">Секунды</option>
+            </UnitSelect>
+          </UnitSelector>
+        </ControlsContainer>
 
         <StatsGrid>
           <StatCard>
-            <StatValue>{chartData.stats.totalHours}ч</StatValue>
-            <StatLabel>Всего времени</StatLabel>
+            <StatValue>{formatTime(stats.totalSeconds, timeUnit)}</StatValue>
+            <StatLabel>Всего времени ({getTimeUnitLabel(timeUnit)})</StatLabel>
           </StatCard>
           <StatCard>
-            <StatValue>{chartData.stats.totalEntries}</StatValue>
+            <StatValue>{stats.totalEntries}</StatValue>
             <StatLabel>Записей времени</StatLabel>
           </StatCard>
           <StatCard>
-            <StatValue>{chartData.stats.averagePerDay}ч</StatValue>
-            <StatLabel>В среднем в день</StatLabel>
+            <StatValue>{formatTime(stats.averagePerDay, timeUnit)}</StatValue>
+            <StatLabel>В среднем на запись</StatLabel>
           </StatCard>
           <StatCard>
-            <StatValue>{chartData.stats.projectsCount}</StatValue>
+            <StatValue>{stats.projectsCount}</StatValue>
             <StatLabel>Активных проектов</StatLabel>
           </StatCard>
         </StatsGrid>
@@ -428,7 +490,7 @@ const AnalyticsPage = () => {
           </ChartWrapper>
 
           <ChartWrapper>
-            <ChartTitle>⏱️ Часы работы по проектам</ChartTitle>
+            <ChartTitle>⏱️ Время работы по проектам</ChartTitle>
             <ChartContainer>
               {chartData.barData && chartData.barData.labels[0] !== 'Нет данных' ? (
                 <Bar 
